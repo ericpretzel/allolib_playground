@@ -24,5 +24,4 @@ This will build allolib, and create an executable for the file.cpp called 'file'
 
 ## Allolib API documentation
 
-You can find the allolib API doxygen documentation at:
-[https://allosphere-research-group.github.io/allolib-doc/]()
+You can find the allolib API doxygen documentation at: https://allosphere-research-group.github.io/allolib-doc/
