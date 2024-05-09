@@ -4,6 +4,14 @@ This is a fork of [Allolib Playground](https://github.com/AlloSphere-Research-Gr
 
 TODO: the projects will be put in this readme when i actually make them
 
+## Project 0: me and my boids
+Video here: https://youtu.be/h7SJa4J97Pc
+
+The complex flocking and wandering behavior of "boids" comes from relatively simple rules. Here I attempt to use this chaotic behavior to make procedural music based on the size of "groups" formed by the boids as time goes on. This is mainly me messing around with Allolib and struggling to understand how it works, rather than studying actual music synthesis. 
+
+Currently it just sounds awful. I'll probably return to this later; it might have potential...
+
+
 ## Setup
 
 Get all dependencies and tools required by allolib. See the [readme file for allolib](https://github.com/AlloSphere-Research-Group/allolib/blob/master/readme.md).
