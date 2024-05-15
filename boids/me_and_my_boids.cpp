@@ -43,19 +43,38 @@ Lance Putnam, Oct. 2014
 #include "boid.hpp"
 
 using namespace al;
-static const int Nb = 32;  // Number of boids
-static int groupSizes[Nb];
+static const int Nb = 16;  // Number of boids
+static float ratios[5] = { // pentatonic scale ratios
+  0,
+  2,
+  4,
+  7,
+  9
+};
 
 struct MyApp : public App {
-  Boid boids[Nb];
+  Boid *boids[Nb];
   Mesh heads, tails;
   Mesh box;
 
   PolySynth synth;
 
-  void onCreate() {
-    synth.allocatePolyphony<Boid>(Nb);
+  std::unordered_set<int> inUseIds;
 
+  MyApp() {
+    for (int i = 0; i < Nb; ++i) {
+      boids[i] = new Boid;
+    }
+  }
+
+  ~MyApp() {
+    for (int i = 0; i < Nb; ++i) {
+      delete boids[i];
+    }
+  }
+
+  void onCreate() {
+    synth.allocatePolyphony<BoidGroup>(Nb * Nb);
     box.primitive(Mesh::LINE_LOOP);
     box.vertex(-1, -1);
     box.vertex(1, -1);
@@ -65,67 +84,118 @@ struct MyApp : public App {
     nav().pullBack(4);
 
     resetBoids();
-
-    for (int i = 0; i < Nb; ++i) {
-      auto voice = synth.getVoice<Boid>(i);
-      synth.triggerOn(voice, 0, i);
-    }
   }
 
   void onSound(AudioIOData& io) override {
     synth.render(io);
   }
 
+  bool group_is_intact(Boid *src, BoidGroup *group) {
+    std::unordered_set<Boid *> visited;
+    std::vector<Boid *> stack;
+    stack.push_back(src);
+    while (!stack.empty()) {
+      auto b = stack.back();
+      stack.pop_back();
+      if (visited.find(b) != visited.end()) {
+        continue;
+      }
+      visited.insert(b);
+      //if (b->group != group) {
+      //  return false;
+      //}
+      for (auto n : b->neighbors) {
+        stack.push_back(n);
+      }
+    }
+    return visited == group->boids;
+  }
+
+  void fill_group(Boid *src, BoidGroup *group) {
+    std::unordered_set<Boid *> visited;
+    std::vector<Boid *> stack;
+    stack.push_back(src);
+    while (!stack.empty()) {
+      auto b = stack.back();
+      stack.pop_back();
+      if (visited.find(b) != visited.end()) {
+        continue;
+      }
+      visited.insert(b);
+      if (b->group != nullptr && b->group != group) {
+        b->group->boids.erase(b);
+        if (b->group->boids.empty()) {
+          synth.triggerOff(b->group->id);
+          inUseIds.erase(b->group->id);
+        }
+      }
+      b->group = group;
+      b->group->boids.insert(b);
+      for (auto n : b->neighbors) {
+        stack.push_back(n);
+      }
+    }
+    group->mOsc.freq(440 * pow(2, ratios[group->boids.size() % 5] / 12.0));
+  }
+
   // Randomize boid positions/velocities uniformly inside unit disc
   void resetBoids() {
-    for (auto& b : boids) {
-      b.pos = rnd::ball<Vec2f>();
-      b.vel = rnd::ball<Vec2f>();
+    for (int i = 0; i < Nb; i++) {
+      auto b = boids[i];
+      b->neighbors.clear();
+      b->group = nullptr;
+      b->pos = rnd::ball<Vec2f>();
+      b->vel = rnd::ball<Vec2f>();
     }
-  }
+    for (int i = 0; i < Nb; i++) {
+      for (int j = 0; j < Nb; j++) {
+        if (i == j) {
+          continue;
+        }
+        auto ds = boids[i]->pos - boids[j]->pos;
+        auto dist = ds.mag();
+        if (dist <= 0.25) {
+          boids[i]->neighbors.insert(boids[j]);
+          boids[j]->neighbors.insert(boids[i]);
+        }
+      }
+    }
+    for (int i = 0; i < Nb; i++) {
+      auto b = boids[i];
+      if (b->group == nullptr) {
+        auto group = synth.getVoice<BoidGroup>();
+        group->boids.clear();
+        group->id = i;
+        while (inUseIds.find(group->id) != inUseIds.end()) {
+          group->id = group->id + Nb;
+        }
+        fill_group(b, group);
+        inUseIds.insert(i);
+        synth.triggerOn(b->group, 0, group->id);
+      }
+    }
+  }  
 
   void onAnimate(double dt_ms) {
     float dt = dt_ms;
 
     for (int i = 0; i < Nb; ++i) {
-      boids[i].groupId = -1;
-      groupSizes[i] = 0;
+      boids[i]->neighbors.clear();
     }
-    boids[0].groupId = 0;
-    int numGroups = 1;
-
 
     // Compute boid-boid interactions
-    for (int i = 0; i < Nb - 1; ++i) {
-      for (int j = i + 1; j < Nb; ++j) {
+    for (int i = 0; i < Nb; ++i) {
+      for (int j = 0; j < Nb; ++j) {
         // printf("checking boids %d and %d\n", i,j);
-
-        auto ds = boids[i].pos - boids[j].pos;
+        if (i == j) {
+          continue;
+        }
+        auto ds = boids[i]->pos - boids[j]->pos;
         auto dist = ds.mag();
 
-        // form groups (incredibly inefficient)
         if (dist <= 0.25) {
-          if (boids[i].groupId == -1 && boids[j].groupId == -1) {
-            boids[i].groupId = numGroups;
-            boids[j].groupId = numGroups;
-            groupSizes[numGroups] = 2;
-            numGroups++;
-          } else if (boids[i].groupId == -1) {
-            boids[i].groupId = boids[j].groupId;
-            groupSizes[boids[j].groupId]++;
-          } else if (boids[j].groupId == -1) {
-            boids[j].groupId = boids[i].groupId;
-            groupSizes[boids[i].groupId]++;
-          } else {
-            // Merge groups
-            int oldGroup = boids[j].groupId;
-            for (int k = 0; k < Nb; ++k) {
-              if (boids[k].groupId == oldGroup) {
-                boids[k].groupId = boids[i].groupId;
-                groupSizes[boids[i].groupId]++;
-              }
-            }
-          }
+          boids[i]->neighbors.insert(boids[j]);
+          boids[j]->neighbors.insert(boids[i]);
         }
 
         // Collision avoidance
@@ -134,27 +204,46 @@ struct MyApp : public App {
         float push = exp(-al::pow2(dist / pushRadius)) * pushStrength;
 
         auto pushVector = ds.normalized() * push;
-        boids[i].vel += pushVector;
-        boids[j].vel -= pushVector;
+        boids[i]->vel += pushVector;
+        boids[j]->vel -= pushVector;
 
         // Velocity matching
         float matchRadius = 0.125;
         float nearness = exp(-al::pow2(dist / matchRadius));
-        Vec2f veli = boids[i].vel;
-        Vec2f velj = boids[j].vel;
+        Vec2f veli = boids[i]->vel;
+        Vec2f velj = boids[j]->vel;
 
         // Take a weighted average of velocities according to nearness
-        boids[i].vel = veli * (1 - 0.5 * nearness) + velj * (0.5 * nearness);
-        boids[j].vel = velj * (1 - 0.5 * nearness) + veli * (0.5 * nearness);
+        boids[i]->vel = veli * (1 - 0.5 * nearness) + velj * (0.5 * nearness);
+        boids[j]->vel = velj * (1 - 0.5 * nearness) + veli * (0.5 * nearness);
 
         // TODO: Flock centering
       }
     }
-
+    
+    // merge with any new groups, then check if our group has disjoint members
+    for (int i = 0; i < Nb; i++) {
+      auto b = boids[i];
+      fill_group(b, b->group);
+      if (!group_is_intact(b, b->group)) {
+        auto original_group = b->group;
+        auto new_group = synth.getVoice<BoidGroup>();
+        new_group->boids.clear();
+        new_group->id = i;
+        while (inUseIds.find(new_group->id) != inUseIds.end()) {
+          new_group->id += Nb;
+        }
+        fill_group(b, new_group);
+        inUseIds.insert(new_group->id);
+        for (auto &b : new_group->boids) {
+          original_group->boids.erase(b);
+        }
+        synth.triggerOn(b->group, 0, new_group->id);
+      }
+    }
 
     for (size_t i = 0; i < Nb; ++i) {
-      auto& b = boids[i];
-      b.update(dt);
+      boids[i]->update(dt);
     }
   }
 
@@ -166,13 +255,10 @@ struct MyApp : public App {
     // g.stroke(8);
     g.meshColor();
 
+    synth.render(g);
     // g.stroke(1);
     // g.color(1);
     g.draw(box);
-
-    for (auto& b : boids) {
-      b.draw(g);
-    }
   }
 
   bool onKeyDown(const Keyboard& k) {
@@ -189,7 +275,7 @@ void Boid::update(float dt) {
     pos += vel * dt;
 
     // Random "hunting" motion
-    float huntUrge = 0.2;
+    float huntUrge = 0.1 * group->boids.size();
     auto hunt = rnd::ball<Vec2f>();
     // Use cubed distribution to make small jumps more frequent
     hunt *= hunt.magSqr();
@@ -199,16 +285,14 @@ void Boid::update(float dt) {
     if (pos.x > 1 || pos.x < -1) {
       pos.x = pos.x > 0 ? 1 : -1;
       vel.x = -vel.x;
-      bounced = true;
     }
     if (pos.y > 1 || pos.y < -1) {
       pos.y = pos.y > 0 ? 1 : -1;
       vel.y = -vel.y;
-      bounced = true;
     }
 }
 
-void Boid::draw(Graphics& g) {
+void Boid::draw(Graphics& g, HSV color) {
   head.reset();
   head.primitive(Mesh::POINTS);
   head.vertex(pos);
@@ -219,7 +303,7 @@ void Boid::draw(Graphics& g) {
   tail.vertex(pos);
   tail.vertex(pos - vel.normalized(0.07));
 
-  head.color(HSV(1.0 / 32.0 * groupId, 1.0, 1.0));
+  head.color(color);
 
   tail.color(head.colors()[0]);
   tail.color(RGB(0.5));
@@ -228,38 +312,29 @@ void Boid::draw(Graphics& g) {
   g.draw(tail);
 }
 
-void Boid::onProcess(al::AudioIOData& io) {
+void BoidGroup::onProcess(al::AudioIOData& io) {
   while (io()) {
-    mOsc.freq(440 + groupSizes[groupId] * 100);
-    float s1 = mOsc() * mAmpEnv() * 0.5;
+    float s1 = mOsc() * (16.f / (float)Nb);
     float s2;
     mPan(s1, s1, s2);
     io.out(0) += s1 / Nb;
     io.out(1) += s2 / Nb;
   }
-
-  // We need to let the synth know that this voice is done
-  // by calling the free(). This takes the voice out of the
-  // rendering chain
-  if (mAmpEnv.done()) free();
 }
 
-void Boid::init() {
-  mAmpEnv.curve(0);
-  mAmpEnv.levels(0, 1, 1, 0);
-  mAmpEnv.lengths()[0] = 0.5;
-  mAmpEnv.lengths()[2] = 0.5;
-  mAmpEnv.sustainPoint(2);
-  
-  mOsc.freq(440);
+void BoidGroup::onProcess(al::Graphics &g) {
+  for (auto b : boids) {
+    b->draw(g, HSV(1.0 / (float)Nb * boids.size(), 1, 1));
+  }
+}
 
+void BoidGroup::init() {
+  mOsc.freq(440);
   mPan.pos(0);
 }
 
-
-
 int main() {
   MyApp app;
-  app.configureAudio(44100, 512, 2, 0);
+  // app.configureAudio(44100, 512, 2, 0);
   app.start();
 }
