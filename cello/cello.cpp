@@ -17,66 +17,58 @@
 #include "al/graphics/al_Shapes.hpp"
 #include "al/graphics/al_Font.hpp"
 
-class CelloString : public al::SynthVoice {
-public:
-    al::Parameter freq {"freq", "", 440.0, "", 20.0, 5000.0};
-    al::Parameter amp {"amp", "", 0.5, "", 0.0, 1.0};
+static float bowLength = 100.0f;
+static float stringLength = 250.0f;
 
-    al::Mesh string;
+class CelloString {
 
-    gam::Saw<> saw;
-
-    void init() override {
-        saw.freq(freq.get());
-        string.primitive(al::Mesh::POINTS);
-    }
-
-    void onProcess(al::AudioIOData& io) override {
-
-        while(io()) {
-            float s = saw() * amp.get();
-            io.out(0) += s;
-            io.out(1) += s;
-        }
-        if (!saw.phase()) free();
-    }
-
-    // standing wave equation is 2sin(kx)cos(ft)
-    void update(double dt) {
-        string.reset();
-        for (int x = 0; x < 100; x++) {
-            string.vertex(x/100.0, 0.5 + 0.5 * sin(2 * M_PI * x * freq.get() / 100.0));
-        }
-    }
-
-    void onProcess(al::Graphics &g) override {
-        g.pushMatrix();
-        g.draw(string);
-        g.popMatrix();
-    }
 };
 
 class MyApp : public al::App {
 
-    al::SynthGUIManager<CelloString> synthManager {"cello"};
-
     al::Mesh bow;
     al::Vec2f bowPos;
+    al::Vec2f avgBowVel = {0, 0};
+
+    al::Mesh aString;
+
+    bool playing;
+
+    float amp = 0.1f;
+    float freq = 440.0f;
+    gam::Saw<> saw;
+
 public:
 
     void onCreate() override {
         bow.primitive(al::Mesh::LINE_STRIP);
         bow.vertex(0, 0);
-        bow.vertex(100, 0);
+        bow.vertex(bowLength, 0);
+
+        aString.primitive(al::Mesh::LINE_STRIP);
+        aString.vertex(0, 0);
+        aString.vertex(0, stringLength);
+
+        saw.freq(freq);
     }
 
     void onAnimate(double dt) override {
         auto newBowPos = al::Vec2f(mouse().x(), height() - mouse().y());
         auto v = (newBowPos - bowPos) / dt;
-
-        
+        avgBowVel = 0.9f * avgBowVel + 0.1f * v;
 
         bowPos = newBowPos;
+    }
+
+    void onSound(al::AudioIOData &io) override {
+        while (io()) {
+            if (playing) {
+                std::cout << "avgBowVel: " << avgBowVel.mag() << std::endl;
+                float s = saw() * amp;
+                io.out(0) = s;
+                io.out(1) = s;
+            }
+        }
     }
 
     void onDraw(al::Graphics &g) override {
@@ -93,9 +85,34 @@ public:
         g.color(1);
         g.draw(bow);
         g.popMatrix();
+
+        g.pushMatrix();
+        g.translate(width() / 2, height() / 4);
+        g.color(1);
+        g.draw(aString);
+        g.popMatrix();
     }
 
     bool onKeyDown(const al::Keyboard &k) override {
+        return true;
+    }
+
+    bool onMouseDrag(const al::Mouse &m) override {
+        if (m.left() && m.x() + bowLength > width() / 2 && m.x() < width() / 2){
+            playing = true;
+        } else {
+            playing = false;
+        }
+
+        return true;
+    }
+
+    bool onMouseMove(const al::Mouse &m) override {
+        if (m.left() && m.x() + bowLength > width() / 2 && m.x() < width() / 2){
+            playing = true;
+        } else {
+            playing = false;
+        }
         return true;
     }
 
