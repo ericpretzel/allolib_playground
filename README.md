@@ -13,6 +13,11 @@ The complex flocking and wandering behavior of "boids" comes from relatively sim
 Currently it just sounds awful. I'll probably return to this later; it might have potential...
 
 
+## Project 1: playable cello
+Demo 1: https://youtu.be/pSX_qqyAOzY (Only has the A string and sounds like a bee.)
+
+Playable cello! I show off vibrato with frequency modulation and also crude physical modeling of a cello's bowed string (*extremely* work in progress)
+
 ## Setup
 
 Get all dependencies and tools required by allolib. See the [readme file for allolib](https://github.com/AlloSphere-Research-Group/allolib/blob/master/readme.md).
