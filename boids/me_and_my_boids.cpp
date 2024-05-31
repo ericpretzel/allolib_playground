@@ -221,7 +221,7 @@ struct MyApp : public App {
       }
     }
     
-    // merge with any new groups, then check if our group has disjoint members
+    // merge with any new groups, then check if our group has split
     for (int i = 0; i < Nb; i++) {
       auto b = boids[i];
       fill_group(b, b->group);
@@ -315,10 +315,10 @@ void Boid::draw(Graphics& g, HSV color) {
 void BoidGroup::onProcess(al::AudioIOData& io) {
   while (io()) {
     float s1 = mOsc() * (16.f / (float)Nb);
-    float s2;
-    mPan(s1, s1, s2);
-    io.out(0) += s1 / Nb;
-    io.out(1) += s2 / Nb;
+    // float s2;
+    // mPan(s1, s1, s2);
+    io.out(0) += s1 / (float)Nb;
+    // io.out(1) += s2 / Nb;
   }
 }
 
@@ -335,6 +335,6 @@ void BoidGroup::init() {
 
 int main() {
   MyApp app;
-  // app.configureAudio(44100, 512, 2, 0);
+  app.configureAudio(44100, 512, 1, 0);
   app.start();
 }

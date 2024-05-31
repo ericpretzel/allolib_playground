@@ -1,6 +1,7 @@
 #include <cstdio>  // for printing to stdout
 #include <unordered_map>
 #include <unordered_set>
+#include <set>
 #include <algorithm>
 
 #include "Gamma/Analysis.h"
