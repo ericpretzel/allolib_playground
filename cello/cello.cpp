@@ -18,143 +18,130 @@
 #include "al/graphics/al_Shapes.hpp"
 #include "al/graphics/al_Font.hpp"
 
-static float bowLength = 300.0f;
-static float stringLength = 250.0f;
+#include "my_app.hpp"
+#include "bow.hpp"
+#include "cello_string.hpp"
 
-class CelloString {
+void MyApp::onCreate() {
+    bow = new Bow(this);
+    strings.push_back(CelloString(this, 220.0f, al::Vec2f(width() / 4, height() / 2 - 50))); // A3
+    strings.push_back(CelloString(this, 146.8f, al::Vec2f(width() / 4 + 100, height() / 2 - 100))); // D3
+    strings.push_back(CelloString(this, 98.0f, al::Vec2f(width() / 4 + 200, height() / 2 - 150))); // G2
+    strings.push_back(CelloString(this, 65.41f, al::Vec2f(width() / 4 + 300, height() / 2 - 200))); // C2
+}
 
-};
+void MyApp::onExit() {
+    delete bow;
+}
 
-class MyApp : public al::App {
-
-    al::Mesh bow;
-    al::Vec2f bowPos = {0.f, 0.f};
-    al::Vec2f avgBowVel = {0.f, 0.f};
-
-    bool fingers[7] = {true, false, false, false, false, false, false};
-
-    al::Mesh aString;
-
-    bool bowDown = false;
-    bool bowMoving = false;
-
-    float amp = 0.1f;
-    float freq = 440.0f;
-    gam::Saw<> saw;
-
-    gam::Sine<> vibrato;
-
-public:
-
-    void onCreate() override {
-        bow.primitive(al::Mesh::LINE_STRIP);
-        bow.vertex(0, 0);
-        bow.vertex(bowLength, 0);
-
-        aString.primitive(al::Mesh::LINE_STRIP);
-        aString.vertex(0, 0);
-        aString.vertex(0, stringLength);
-
-        vibrato.freq(5.f);
-
-        saw.freq(freq);
+void MyApp::onAnimate(double _dt) {
+    float dt = _dt;
+    if (dt == 0) return;
+    bow->update(dt);
+    for (auto &s : strings) {
+        s.update(dt);
     }
+}
 
-    void onAnimate(double _dt) override {
-        float dt = _dt;
-        if (dt == 0) return;
-        auto newBowPos = al::Vec2f(float(mouse().x()), float(height()) - mouse().y());
-        auto v = (newBowPos - bowPos) / dt;
-        avgBowVel = avgBowVel * 0.9 + v * 0.1;
-        if (avgBowVel.mag() > 0.1f) {
-            bowMoving = true;
-        } else {
-            bowMoving = false;
-        }
-        bowPos = newBowPos;
-    }
-
-    void onSound(al::AudioIOData &io) override {
-        while (io()) {
-            if (bowDown && bowMoving) {
-                saw.freqAdd(vibrato() * 10.0f);
-                float s = saw() * amp * avgBowVel.mag() * 0.01f;
-                io.out(0) = s;
-                io.out(1) = s;
-            }
+void MyApp::onSound(al::AudioIOData &io) {
+    while (io()) {
+        for (auto &s : strings) {
+            s.process(io);
         }
     }
+}
 
-    void onDraw(al::Graphics &g) override {
-        g.camera(al::Viewpoint::ORTHO_FOR_2D);
-        g.clear(0);
-        g.lineWidth(2);
-        g.depthTesting(true);
-        g.pointSize(8);
-        // g.nicest();
-        // g.stroke(8);
-        
-        g.pushMatrix();
-        g.translate(bowPos);
-        g.color(1);
-        g.draw(bow);
-        g.popMatrix();
-
-        g.pushMatrix();
-        g.translate(width() / 2, height() / 4);
-        g.color(1);
-        g.draw(aString);
-        g.popMatrix();
+void MyApp::onDraw(al::Graphics &g) {
+    g.camera(al::Viewpoint::ORTHO_FOR_2D);
+    g.clear(0);
+    g.lineWidth(2);
+    g.depthTesting(true);
+    g.pointSize(8);
+    // g.nicest();
+    // g.stroke(8);
+    g.meshColor();
+    
+    bow->draw(g);
+    for (auto &s : strings) {
+        s.draw(g);
     }
+}
 
-    bool onKeyDown(const al::Keyboard &k) override {
-        if (k.key() < '1' || k.key() > '6') return true;
-        fingers[k.key() - '0'] = true;
-        for (int i = 6; i >= 0; --i) {
-            if (fingers[i]) {
-                saw.freq(440.0f * powf(2.0f, i / 12.0f));
-                break;
-            }
+bool MyApp::onKeyDown(const al::Keyboard &k) {
+    auto it = keyToIndex.find(k.key());
+    if (it != keyToIndex.end()) {
+        strings[it->second / 8].press_finger((it->second % 8) + 1);
+    }
+    return true;
+}
+
+bool MyApp::onKeyUp(const al::Keyboard &k) {
+    auto it = keyToIndex.find(k.key());
+    if (it != keyToIndex.end()) {
+        strings[it->second / 8].lift_finger((it->second % 8) + 1);
+    }
+    return true;
+}
+
+void CelloString::process(al::AudioIOData &io) {
+    if (!vibrating) return;
+    saw.freqAdd(vibrato() * 10.0f);
+    float s = saw() * 0.1f;
+    io.out(0) += s;
+    io.out(1) += s;
+}
+
+void CelloString::draw(al::Graphics &g) {
+    g.pushMatrix();
+    g.translate(pos);
+    g.draw(mesh);
+    g.popMatrix();
+}
+
+void CelloString::update(float dt) {
+    vibrating = app->bow->down && 
+        app->bow->moving && 
+        app->bow->pos.x + bowLength > pos.x && 
+        app->bow->pos.x < pos.x &&
+        app->bow->pos.y > pos.y && 
+        app->bow->pos.y < pos.y + stringLength;
+}
+
+void CelloString::lift_finger(int finger) {
+    fingers[finger] = false;
+    for (int i = 8; i >= 0; --i) {
+        if (fingers[i]) {
+            saw.freq(baseFreq * powf(2.0f, i / 12.0f));
+            break;
         }
-        return true;
     }
+}
 
-    bool onKeyUp(const al::Keyboard &k) override {
-        if (k.key() < '1' || k.key() > '6') return true;
-        fingers[k.key() - '0'] = false;
-        for (int i = 6; i >= 0; --i) {
-            if (fingers[i]) {
-                saw.freq(440.0f * powf(2.0f, i / 12.0f));
-                break;
-            }
+void CelloString::press_finger(int finger) {
+    fingers[finger] = true;
+    for (int i = 8; i >= 0; --i) {
+        if (fingers[i]) {
+            saw.freq(baseFreq * powf(2.0f, i / 12.0f));
+            break;
         }
-        return true;
     }
+}
 
-    bool onMouseDrag(const al::Mouse &m) override {
-        if (m.left() && m.x() + bowLength > width() / 2 && m.x() < width() / 2){
-            bowDown = true;
-        } else {
-            bowDown = false;
-        }
-        return true;
-    }
+void Bow::draw(al::Graphics &g) {
+    g.pushMatrix();
+    g.translate(pos);
+    g.draw(mesh);
+    g.popMatrix();
+}
 
-    bool onMouseMove(const al::Mouse &m) override {
-        if (m.left() && m.x() + bowLength > width() / 2 && m.x() < width() / 2){
-            bowDown = true;
-        } else {
-            bowDown = false;
-        }
-        return true;
-    }
-
-    bool onMouseUp(const al::Mouse &m) override {
-        bowDown = false;
-        return true;
-    }
-
-};
+void Bow::update(float dt) {
+    al::Vec2f newPos = {float(app->mouse().x()), app->height() - float(app->mouse().y())};
+    auto v = (newPos - pos) / dt;
+    avgVel = avgVel * 0.9 + v * 0.1;
+    pos = newPos;
+    moving = avgVel.mag() > 0.1f;
+    down = app->mouse().left();
+}
 
 int main() {
   MyApp app;
