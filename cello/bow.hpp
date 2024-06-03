@@ -22,7 +22,7 @@
 
 #include "my_app.hpp"
 
-static float bowLength = 300.0f;
+static float bowLength = 400.0f;
 
 class MyApp;
 
@@ -47,5 +47,6 @@ private:
     al::Vec2f avgVel = {0.f, 0.f};
     bool down = false;
     bool moving = false;
+    bool attacking = true;
 
 };

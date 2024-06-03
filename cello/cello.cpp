@@ -24,11 +24,24 @@
 #include "cello_string.hpp"
 
 void MyApp::onCreate() {
+    navControl().disable();
+
     bow = new Bow(this);
-    strings.push_back(CelloString(this, 220.0f, al::Vec2f(width() / 4, height() / 2 - 50))); // A3
-    strings.push_back(CelloString(this, 146.8f, al::Vec2f(width() / 4 + 100, height() / 2 - 100))); // D3
-    strings.push_back(CelloString(this, 98.0f, al::Vec2f(width() / 4 + 200, height() / 2 - 150))); // G2
-    strings.push_back(CelloString(this, 65.41f, al::Vec2f(width() / 4 + 300, height() / 2 - 200))); // C2
+    dimensions(800, 1000);
+    strings.push_back(CelloString(this, 220.0f, al::Vec2f(width() / 8.0 + 150, height() / 8.0 * 7.0 - 150))); // A3
+    strings.push_back(CelloString(this, 146.8f, al::Vec2f(width() / 8.0 * 3 + 75, height() / 8.0 * 5 - 125))); // D3
+    strings.push_back(CelloString(this, 98.0f, al::Vec2f(width() / 8.0 * 5 + 25, height() / 8.0 * 3 - 100))); // G2
+    strings.push_back(CelloString(this, 65.41f, al::Vec2f(width() / 8.0 * 7 - 50, height() / 8.0 - 75))); // C2
+
+    filter_freq.registerChangeCallback([this](float value) {
+        for (auto &s : strings) {
+            s.set_filter_freq(value);
+        }
+    });
+
+    // gui << filter_freq;
+
+    // gui.init();
 }
 
 void MyApp::onExit() {
@@ -66,6 +79,7 @@ void MyApp::onDraw(al::Graphics &g) {
     for (auto &s : strings) {
         s.draw(g);
     }
+    // gui.draw(g);
 }
 
 bool MyApp::onKeyDown(const al::Keyboard &k) {
@@ -85,9 +99,18 @@ bool MyApp::onKeyUp(const al::Keyboard &k) {
 }
 
 void CelloString::process(al::AudioIOData &io) {
-    if (!vibrating) return;
-    saw.freqAdd(vibrato() * 10.0f);
-    float s = saw() * 0.1f;
+    if (adsrEnv.done()) return;
+    
+    saw.freqAdd(vibrato());
+    float s = saw() * app->bow->avgVel.x * 0.001f * adsrEnv();
+
+    // Compute two wet channels of reverberation
+    float wet1, wet2;
+    reverb(s, wet1, wet2);
+    s += wet1 + wet2;
+    s = lpf(s);
+    // s = hpf(s);
+
     io.out(0) += s;
     io.out(1) += s;
 }
@@ -100,12 +123,33 @@ void CelloString::draw(al::Graphics &g) {
 }
 
 void CelloString::update(float dt) {
-    vibrating = app->bow->down && 
+    being_played = app->bow->down && 
         app->bow->moving && 
         app->bow->pos.x + bowLength > pos.x && 
         app->bow->pos.x < pos.x &&
         app->bow->pos.y > pos.y && 
         app->bow->pos.y < pos.y + stringLength;
+
+    if (being_played) {
+        if (app->bow->attacking || adsrEnv.done()) {
+            adsrEnv.reset();
+            app->bow->attacking = false;
+        }
+    } else {
+        adsrEnv.release();
+    }
+    
+    if (!adsrEnv.done()) {
+        mesh.vertices().clear();
+        for (int i = 0; i < 50; ++i) {
+            mesh.vertex(sin(M_PI * i / 50.f) * (being_played ? vibrato() * 3 : 1), i * stringLength / 50.f);
+        }
+    } else {
+        mesh.vertices().clear();
+        for (int i = 0; i < 50; ++i) {
+            mesh.vertex(0, i * stringLength / 50.f);
+        }
+    }
 }
 
 void CelloString::lift_finger(int finger) {
@@ -113,6 +157,8 @@ void CelloString::lift_finger(int finger) {
     for (int i = 8; i >= 0; --i) {
         if (fingers[i]) {
             saw.freq(baseFreq * powf(2.0f, i / 12.0f));
+            mesh.colors().clear();
+            mesh.colorFill(al::HSV(i / 8.f));
             break;
         }
     }
@@ -123,6 +169,8 @@ void CelloString::press_finger(int finger) {
     for (int i = 8; i >= 0; --i) {
         if (fingers[i]) {
             saw.freq(baseFreq * powf(2.0f, i / 12.0f));
+            mesh.colors().clear();
+            mesh.colorFill(al::HSV(i / 8.f));
             break;
         }
     }
@@ -139,6 +187,10 @@ void Bow::update(float dt) {
     al::Vec2f newPos = {float(app->mouse().x()), app->height() - float(app->mouse().y())};
     auto v = (newPos - pos) / dt;
     avgVel = avgVel * 0.9 + v * 0.1;
+    if ((v.x > 0 && avgVel.x < 0) || (v.x < 0 && avgVel.x > 0)) {
+        avgVel = {0, 0};
+        attacking = true;
+    }
     pos = newPos;
     moving = avgVel.mag() > 0.1f;
     down = app->mouse().left();

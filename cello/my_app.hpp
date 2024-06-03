@@ -11,6 +11,7 @@
 #include "al/scene/al_SynthSequencer.hpp"
 #include "al/ui/al_ParameterGUI.hpp"
 #include "al/ui/al_Parameter.hpp"
+#include "al/ui/al_ControlGUI.hpp"
 
 #include "al/graphics/al_Shapes.hpp"
 #include "al/graphics/al_Font.hpp"
@@ -62,6 +63,8 @@ static std::unordered_map<char, int> keyToIndex = {
 
 class MyApp : public al::App {
 public:
+    al::ControlGUI gui;
+    al::Parameter filter_freq {"filter_freq", "", 2000.0f, "", 20.0f, 20000.0f};
     Bow *bow;
     std::vector<CelloString> strings;
 

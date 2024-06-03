@@ -15,8 +15,9 @@ Currently it just sounds awful. I'll probably return to this later; it might hav
 
 ## Project 1: playable cello
 Demo 1: https://youtu.be/pSX_qqyAOzY (Only has the A string and sounds like a bee.)
+Demo 2: https://youtu.be/BhyFifdUczQ (Has all four strings and sounds like it's an underwater brass instrument.)
 
-Playable cello! I show off vibrato with frequency modulation and also crude physical modeling of a cello's bowed string (*extremely* work in progress)
+Playable cello! I show off vibrato with frequency modulation and also crude physical modeling of a cello's bowed string (*very* work in progress)
 
 ## Setup
 
