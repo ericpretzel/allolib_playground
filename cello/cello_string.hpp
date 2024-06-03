@@ -85,7 +85,7 @@ private:
 
     al::Reverb<float> reverb;
 
-    bool being_played;
+    bool being_played = false;
 
     bool fingers[9] = {true, false, false, false, false, false, false, false, false};
 };

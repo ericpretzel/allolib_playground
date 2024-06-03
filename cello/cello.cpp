@@ -27,11 +27,11 @@ void MyApp::onCreate() {
     navControl().disable();
 
     bow = new Bow(this);
-    dimensions(800, 1000);
-    strings.push_back(CelloString(this, 220.0f, al::Vec2f(width() / 8.0 + 150, height() / 8.0 * 7.0 - 150))); // A3
-    strings.push_back(CelloString(this, 146.8f, al::Vec2f(width() / 8.0 * 3 + 75, height() / 8.0 * 5 - 125))); // D3
-    strings.push_back(CelloString(this, 98.0f, al::Vec2f(width() / 8.0 * 5 + 25, height() / 8.0 * 3 - 100))); // G2
-    strings.push_back(CelloString(this, 65.41f, al::Vec2f(width() / 8.0 * 7 - 50, height() / 8.0 - 75))); // C2
+    dimensions(1200, 1000);
+    strings.push_back(CelloString(this, 220.0f, al::Vec2f(width() / 8.0 + 175, height() / 8.0 * 7.0 - 150))); // A3
+    strings.push_back(CelloString(this, 146.8f, al::Vec2f(width() / 8.0 * 3 + 100, height() / 8.0 * 5 - 125))); // D3
+    strings.push_back(CelloString(this, 98.0f, al::Vec2f(width() / 8.0 * 5 + 50, height() / 8.0 * 3 - 100))); // G2
+    strings.push_back(CelloString(this, 65.41f, al::Vec2f(width() / 8.0 * 7 - 25, height() / 8.0 - 75))); // C2
 
     filter_freq.registerChangeCallback([this](float value) {
         for (auto &s : strings) {
@@ -68,9 +68,9 @@ void MyApp::onSound(al::AudioIOData &io) {
 void MyApp::onDraw(al::Graphics &g) {
     g.camera(al::Viewpoint::ORTHO_FOR_2D);
     g.clear(0);
-    g.lineWidth(2);
+    g.lineWidth(10.f);
     g.depthTesting(true);
-    g.pointSize(8);
+    g.pointSize(24);
     // g.nicest();
     // g.stroke(8);
     g.meshColor();
@@ -132,9 +132,10 @@ void CelloString::update(float dt) {
 
     if (being_played) {
         if (app->bow->attacking || adsrEnv.done()) {
+            adsrEnv.levels(0, 2, 1, 0);
             adsrEnv.reset();
             app->bow->attacking = false;
-        }
+        } // else if (adsrEnv.done()) { adsrEnv.levels(1, 1, 1, 0); adsrEnv.reset(); }
     } else {
         adsrEnv.release();
     }
@@ -142,7 +143,7 @@ void CelloString::update(float dt) {
     if (!adsrEnv.done()) {
         mesh.vertices().clear();
         for (int i = 0; i < 50; ++i) {
-            mesh.vertex(sin(M_PI * i / 50.f) * (being_played ? vibrato() * 3 : 1), i * stringLength / 50.f);
+            mesh.vertex(sin(M_PI * i / 50.f) * (being_played ? vibrato() * 3.5f : 1), i * stringLength / 50.f);
         }
     } else {
         mesh.vertices().clear();
