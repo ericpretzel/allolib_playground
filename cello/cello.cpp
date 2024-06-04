@@ -28,10 +28,10 @@ void MyApp::onCreate() {
 
     bow = new Bow(this);
     dimensions(1200, 1000);
-    strings.push_back(CelloString(this, 220.0f, al::Vec2f(width() / 8.0 + 175, height() / 8.0 * 7.0 - 150))); // A3
-    strings.push_back(CelloString(this, 146.8f, al::Vec2f(width() / 8.0 * 3 + 100, height() / 8.0 * 5 - 125))); // D3
-    strings.push_back(CelloString(this, 98.0f, al::Vec2f(width() / 8.0 * 5 + 50, height() / 8.0 * 3 - 100))); // G2
-    strings.push_back(CelloString(this, 65.41f, al::Vec2f(width() / 8.0 * 7 - 25, height() / 8.0 - 75))); // C2
+    strings.push_back(CelloString(this, 220.0f, al::Vec2f(width() / 8.0 + 300, height() / 8.0 * 7.0 - 175))); // A3
+    strings.push_back(CelloString(this, 146.8f, al::Vec2f(width() / 8.0 * 3 + 100, height() / 8.0 * 5 - 150))); // D3
+    strings.push_back(CelloString(this, 98.0f, al::Vec2f(width() / 8.0 * 5 - 100, height() / 8.0 * 3 - 125))); // G2
+    strings.push_back(CelloString(this, 65.41f, al::Vec2f(width() / 8.0 * 7 - 300, height() / 8.0 - 100))); // C2
 
     filter_freq.registerChangeCallback([this](float value) {
         for (auto &s : strings) {
@@ -52,8 +52,13 @@ void MyApp::onAnimate(double _dt) {
     float dt = _dt;
     if (dt == 0) return;
     bow->update(dt);
+    bool consume_attack = false;
     for (auto &s : strings) {
         s.update(dt);
+        consume_attack |= s.being_played;
+    }
+    if (consume_attack) {
+        bow->attacking = false;
     }
 }
 
@@ -68,9 +73,9 @@ void MyApp::onSound(al::AudioIOData &io) {
 void MyApp::onDraw(al::Graphics &g) {
     g.camera(al::Viewpoint::ORTHO_FOR_2D);
     g.clear(0);
-    g.lineWidth(10.f);
+    g.lineWidth(2.f);
     g.depthTesting(true);
-    g.pointSize(24);
+    g.pointSize(5.f);
     // g.nicest();
     // g.stroke(8);
     g.meshColor();
@@ -102,14 +107,17 @@ void CelloString::process(al::AudioIOData &io) {
     if (adsrEnv.done()) return;
     
     saw.freqAdd(vibrato());
-    float s = saw() * app->bow->avgVel.x * 0.001f * adsrEnv();
+    saw.freqAdd(detune() * detuneAmount);
+    float s = saw();
 
-    // Compute two wet channels of reverberation
+    s *= abs(app->bow->avgVel.x) * 0.001f * adsrEnv();
+
     float wet1, wet2;
     reverb(s, wet1, wet2);
     s += wet1 + wet2;
     s = lpf(s);
-    // s = hpf(s);
+    s = hpf(s);
+    // s = res(s);
 
     io.out(0) += s;
     io.out(1) += s;
@@ -131,24 +139,26 @@ void CelloString::update(float dt) {
         app->bow->pos.y < pos.y + stringLength;
 
     if (being_played) {
-        if (app->bow->attacking || adsrEnv.done()) {
+        if (app->bow->attacking) {
             adsrEnv.levels(0, 2, 1, 0);
-            adsrEnv.reset();
-            app->bow->attacking = false;
-        } // else if (adsrEnv.done()) { adsrEnv.levels(1, 1, 1, 0); adsrEnv.reset(); }
-    } else {
+            adsrEnv.resetSoft();
+        } else if (adsrEnv.released() || adsrEnv.done()) { 
+            adsrEnv.levels(1, 1, 1, 0);
+            adsrEnv.resetSoft(); 
+        }
+    } else if (!adsrEnv.released()) {
         adsrEnv.release();
     }
     
     if (!adsrEnv.done()) {
         mesh.vertices().clear();
-        for (int i = 0; i < 50; ++i) {
-            mesh.vertex(sin(M_PI * i / 50.f) * (being_played ? vibrato() * 3.5f : 1), i * stringLength / 50.f);
+        for (int i = 0; i < 100; ++i) {
+            mesh.vertex(sin(M_PI * i / 100.f) * vibrato() * 3.5f, i * stringLength / 100.f);
         }
     } else {
         mesh.vertices().clear();
-        for (int i = 0; i < 50; ++i) {
-            mesh.vertex(0, i * stringLength / 50.f);
+        for (int i = 0; i < 100; ++i) {
+            mesh.vertex(0, i * stringLength / 100.f);
         }
     }
 }
@@ -185,11 +195,13 @@ void Bow::draw(al::Graphics &g) {
 }
 
 void Bow::update(float dt) {
-    al::Vec2f newPos = {float(app->mouse().x()), app->height() - float(app->mouse().y())};
+    al::Vec2f newPos = {(float)app->mouse().x(), (float)app->height() - (float)app->mouse().y()};
     auto v = (newPos - pos) / dt;
     avgVel = avgVel * 0.9 + v * 0.1;
-    if ((v.x > 0 && avgVel.x < 0) || (v.x < 0 && avgVel.x > 0)) {
-        avgVel = {0, 0};
+    if ((v.x > 0 && avgVel.x <= 0) || (v.x < 0 && avgVel.x >= 0)) {
+        avgVel = v;
+        attacking = true;
+    } else if (!down && app->mouse().left()) {
         attacking = true;
     }
     pos = newPos;

@@ -39,14 +39,11 @@ public:
     void draw(al::Graphics &g);
 
     void update(float dt);
-
-private:
+    bool attacking = true;
     MyApp *app;
     al::Mesh mesh;
-    al::Vec2f pos = {0.f, 0.f};
-    al::Vec2f avgVel = {0.f, 0.f};
+    al::Vec2f pos{0.f, 0.f};
+    al::Vec2f avgVel{0.f, 0.f};
     bool down = false;
     bool moving = false;
-    bool attacking = true;
-
 };

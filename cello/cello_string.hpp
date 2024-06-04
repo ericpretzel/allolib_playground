@@ -26,26 +26,28 @@ public:
     CelloString(MyApp *app, float baseFreq, al::Vec2f pos) : app(app), baseFreq(baseFreq), pos(pos) {
         saw.freq(baseFreq);
         vibrato.freq(5.f);
-        mesh.primitive(al::Mesh::LINE_STRIP);
-        for (int i = 0; i < 50; ++i) {
-            mesh.vertex(0, i * stringLength / 50.f);
+        mesh.primitive(al::Mesh::POINTS);
+        for (int i = 0; i < 100; ++i) {
+            mesh.vertex(0, i * stringLength / 100.f);
         }
         mesh.colorFill(al::HSV(1));
 
         lpf.type(gam::LOW_PASS);
         lpf.freq(1200);
-        lpf.res(4);
+        // lpf.res(3);
 
         hpf.type(gam::HIGH_PASS);
-        hpf.freq(1000);
-        hpf.res(4);
+        hpf.freq(200);
+        // hpf.res(1);
+
+        detune.freq(0.5);
 
         adsrEnv.levels(0, 2, 1, 0);
         adsrEnv.sustainPoint(2);
-        adsrEnv.lengths()[0] = 0.01;
+        adsrEnv.lengths()[0] = 0.05;
         adsrEnv.lengths()[1] = 0.1;
-        adsrEnv.lengths()[2] = 0;
-        adsrEnv.lengths()[3] = 1.0;
+        adsrEnv.lengths()[2] = 1.0;
+        adsrEnv.lengths()[3] = 0.5;
         adsrEnv.finish();
 
         // from allolib reverb example
@@ -69,7 +71,6 @@ public:
         lpf.freq(freq);
         hpf.freq(freq);
     }
-private:
     MyApp *app;
     float baseFreq;
     al::Mesh mesh;
@@ -77,6 +78,11 @@ private:
     gam::Saw<> saw;
     gam::Sine<> vibrato;
     gam::Env<4> adsrEnv;
+
+    gam::Sine<> sine;
+
+    float detuneAmount = 0.01f;
+    gam::Sine<> detune;
 
     gam::Biquad<> lpf;
     gam::Biquad<> hpf;
