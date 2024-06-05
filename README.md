@@ -1,8 +1,6 @@
 # Eric's Allolib playground
 
-This is a fork of [Allolib Playground](https://github.com/AlloSphere-Research-Group/allolib_playground) for my personal projects in CMPSC 190D S24 at UCSB. 
-
-TODO: the projects will be put in this readme when i actually make them
+This is a fork of [Allolib Playground](https://github.com/AlloSphere-Research-Group/allolib_playground) for my personal projects in CMPSC 190D S24 at UCSB.
 
 ## Project 0: me and my boids
 Iteration 1 Video here: https://youtu.be/h7SJa4J97Pc
